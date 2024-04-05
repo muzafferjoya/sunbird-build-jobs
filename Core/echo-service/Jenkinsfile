@@ -1,0 +1,53 @@
+pipeline {
+    agent any
+    
+    environment {
+        
+        hub_org = "muzafferjoya/sunbird-echo-service"
+        registryCredential = 'muzaffar-docker-hub'
+        dockerImage = ''
+        releaseTag = "master-RC1"
+    }
+    
+    
+    stages {
+        stage('SCM') {
+            steps {
+            script {
+            checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/project-sunbird/sunbird-echo-service.git']], branches: [[name: 'refs/tags/master-RC1']]], poll: false
+
+        }
+            }
+        }
+        stage('Build') {
+            environment {
+                NODE_ENV = "build"
+            }
+            steps {
+                script {
+                    println "Environment will be : ${NODE_ENV}"
+                }
+            }
+        }
+        stage('Building image') {
+          steps{
+            script {
+              //dockerImage = docker.build hub_org
+              dockerImage = docker.build("${hub_org}:${releaseTag}")
+            }
+          }
+        }
+        stage('Deploy Image') {
+      steps{
+        script {
+          docker.withRegistry( '', registryCredential ) {
+            dockerImage.push("$releaseTag")
+             dockerImage.push('latest')
+
+          }
+        }
+      }
+    }
+        
+    }
+}

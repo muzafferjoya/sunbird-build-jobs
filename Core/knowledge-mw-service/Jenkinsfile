@@ -1,0 +1,64 @@
+pipeline {
+    agent any
+    
+    environment {
+        
+        hub_org = "muzafferjoya/knowledge-mw-service"
+        registryCredential = 'muzaffar-docker-hub'
+        dockerImage = ''
+        releaseTag = "release-5.2.0_RC2"
+    }
+    
+    
+    stages {
+        stage('SCM') {
+            steps {
+            script {
+            checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/Sunbird-Knowlg/knowledge-mw-service.git']], branches: [[name: 'refs/tags/release-5.2.0_RC2']]], poll: false
+
+        }
+            }
+        }
+        stage('Build') {
+            environment {
+                NODE_ENV = "build"
+            }
+            steps {
+                sh 'git submodule update --init'
+                
+            }
+        }
+        // stage('Build') {
+        //     environment {
+        //         NODE_ENV = "build"
+        //     }
+        //     steps {
+        //         script {
+        //             println "Environment will be : ${NODE_ENV}"
+        //         }
+        //     }
+        // }
+        stage('Building image') {
+          steps{
+            script {
+              //dockerImage = docker.build hub_org
+              dockerImage = docker.build("${hub_org}:${releaseTag}")
+              sh 'docker push ${hub_org}:${releaseTag}'
+
+            }
+          }
+        }
+    //     stage('Push Image') {
+    //   steps{
+    //     script {
+    //       docker.withRegistry( '', registryCredential ) {
+    //         dockerImage.push("$BUILD_NUMBER")
+    //          dockerImage.push('latest')
+
+    //       }
+    //     }
+    //   }
+    // }
+        
+    }
+}

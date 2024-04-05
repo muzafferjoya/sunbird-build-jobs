@@ -1,0 +1,68 @@
+pipeline {
+    agent any
+    
+    parameters {
+        string(defaultValue: 'refs/tags/release-4.6.0_RC1', description: 'GitHub release tag or branch', name: 'github_release_tag')
+    }
+
+    environment {
+        ANSI_GREEN = "\u001B[32m"
+        ANSI_NORMAL = "\u001B[0m"
+        ANSI_BOLD = "\u001B[1m"
+        ANSI_RED = "\u001B[31m"
+        ANSI_YELLOW = "\u001B[33m"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                ansiColor('xterm') {
+                    script {
+                        cleanWs()
+                        checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/Sunbird-Lern/sunbird-utils.git']], branches: [[name: params.github_release_tag]]], poll: false
+                        
+                        if (params.github_release_tag == "") {
+                            def commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                            def branch_name = sh(script: 'git name-rev --name-only HEAD | rev | cut -d "/" -f1| rev', returnStdout: true).trim()
+                            artifact_version = "${branch_name}_${commit_hash}"
+                            println("${ANSI_BOLD}${ANSI_YELLOW}github_release_tag not specified, using the latest commit hash: ${commit_hash}${ANSI_NORMAL}")
+                        } else {
+                            def scmVars = checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/Sunbird-Lern/sunbird-utils.git']], branches: [[name: params.github_release_tag]]], poll: false
+                            checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/Sunbird-Lern/sunbird-utils.git']], branches: [[name: params.github_release_tag]]], poll: false
+                            artifact_version = "release-4.6.0_RC1"
+                            println("${ANSI_BOLD}${ANSI_YELLOW}github_release_tag specified, building from github_release_tag: ${params.github_release_tag}${ANSI_NORMAL}")
+                        }
+                        echo "artifact_version: ${artifact_version}"
+                    }
+                }
+            }
+        }
+        stage('Maven Initialize') {
+            steps {
+                script {
+                    def mavenHome = tool 'maven'
+                    env.PATH = "${mavenHome}/bin:${env.PATH}"
+                }
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                sh """
+                cd sunbird-cassandra-migration/cassandra-trigger
+                mvn clean compile assembly:single
+                """
+            }
+        }
+
+        stage('Archive artifacts') {
+            steps {
+                sh """
+                mkdir cassandra_artifacts
+                cp sunbird-cassandra-migration/cassandra-trigger/target/cassandra-trigger-*.jar cassandra_artifacts
+                zip -j cassandra_artifacts.zip:${artifact_version} cassandra_artifacts/*
+                """
+            }
+        }
+    }
+}

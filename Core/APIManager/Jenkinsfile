@@ -1,0 +1,65 @@
+pipeline {
+    agent any
+    
+    environment {
+        
+        hub_org = "muzafferjoya/apimanager"
+        registryCredential = 'muzaffar-docker-hub'
+        dockerImage = ''
+        releaseTag = "release-4.10.0_RC1"
+    }
+    
+    
+    stages {
+        stage('SCM') {
+            steps {
+            script {
+            checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/project-sunbird/sunbird-devops.git']], branches: [[name: 'refs/tags/release-4.10.0_RC1']]], poll: false
+            
+            def githubReleaseTag = params.github_release_tag ?: 'defaultTag'
+
+            def commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+            def build_tag = sh(script: "echo ${githubReleaseTag.split('/')[-1]}_${commit_hash}_${env.BUILD_NUMBER}", returnStdout: true).trim()
+            echo "build_tag: ${build_tag}"
+
+            env.NODE_ENV = "build"
+            echo "Environment will be: ${env.NODE_ENV}"
+
+        }
+            }
+        }
+        
+        // stage('Build'){
+        //     steps{
+        //         script{
+        //             dir('images/kong'){
+        //                 sh 'docker build -t ${hub_org}:${releaseTag} .'
+        //             }
+        //         }
+        //     }
+        // }
+        
+         stage('Building image') {
+           steps{
+             script {
+                dir('images/kong'){
+                  dockerImage = docker.build("${hub_org}:${releaseTag}")
+
+             }
+           }
+           }
+         }
+        stage('Push Image') {
+              steps{
+                script {
+                  docker.withRegistry( '', registryCredential ) {
+                    dockerImage.push("$releaseTag")
+                     dockerImage.push('latest')
+        
+                  }
+                }
+              }
+             }
+        
+    }
+}

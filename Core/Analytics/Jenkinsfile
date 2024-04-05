@@ -1,0 +1,78 @@
+pipeline {
+    agent any
+
+    environment {
+        hub_org = "muzafferjoya/sunbird-analytics-service"
+        registryCredential = 'muzaffar-docker-hub'
+        dockerImage = ''
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    if (!env.hub_org) {
+                        error 'Uh Oh! Please set a Jenkins environment variable named hub_org with value as muzafferjoya/sunbird-analytics-service'
+                    } else {
+                        echo "Found environment variable named hub_org with value as: ${env.hub_org}"
+                    }
+                }
+            }
+        }
+
+        stage('Initialize') {
+            steps {
+                script {
+                    def mavenHome = tool 'maven'
+                    env.PATH = "${mavenHome}/bin:${env.PATH}"
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                script {
+    checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/Sunbird-Obsrv/sunbird-analytics-service.git']], branches: [[name: 'refs/tags/release-5.1.2_RC1']]], poll: false
+
+            
+            def githubReleaseTag = params.github_release_tag ?: 'defaultTag'
+
+            def commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+            def build_tag = sh(script: "echo ${githubReleaseTag.split('/')[-1]}_${commit_hash}_${env.BUILD_NUMBER}", returnStdout: true).trim()
+            echo "build_tag: ${build_tag}"
+
+            env.NODE_ENV = "build"
+            echo "Environment will be: ${env.NODE_ENV}"
+
+            sh 'mvn clean install -DskipTests -DCLOUD_STORE_GROUP_ID=org.sunbird -DCLOUD_STORE_ARTIFACT_ID=cloud-store-sdk_2.12 -DCLOUD_STORE_VERSION=1.4.0'
+            //sh 'mvn play2:dist -pl analytics-api'
+                }
+            }
+        }
+
+        // stage('Package'){
+        //     steps{
+        //         script{
+        //             dir('sunbird-analytics-service-distribution'){
+        //                 sh """
+        //                   cp ../analytics-api/target/analytics-api-2.0-dist.zip .
+        //                  /opt/apache-maven-3.6.3/bin/mvn3.6 package -Pbuild-docker-image -Drelease-version=${build_tag}
+        //                   """
+        //             }
+        //         }
+        //     }
+        // }
+
+        // stage('Retagging'){
+        //     steps{
+        //         script{
+        //             sh """
+        //               docker tag sunbird-analytics-service:${build_tag} ${hub_org}:${BUILD_NUMBER}
+        //             """
+        //         }
+        //     }
+        // }
+
+    }
+
+}
