@@ -1,6 +1,6 @@
 # Jenkins Declarative Pipeline Repository
 
-This repository contains a collection of folders for building jobs using Jenkins declarative pipeline.
+This repository contains a collection of folders for building Sunbird ED jobs using Jenkins declarative pipeline.
 
 ## Overview
 
@@ -8,10 +8,10 @@ This repository is organized to provide a structured approach for managing Jenki
 
 ## Folder Structure
 
-- `/Core/Search`: Description of job 1 and its purpose.
-- `/Core/DIAL`: Description of job 2 and its purpose.
+- `/Core/Search`: 
+- `/Core/DIAL`:
 - ...
-- `/CoreN`: Description of job N and its purpose.
+- `/CoreN`:
 
 ## Getting Started
 
