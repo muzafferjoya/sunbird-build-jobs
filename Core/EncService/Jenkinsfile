@@ -1,0 +1,81 @@
+pipeline {
+    agent any
+    
+    parameters {
+        string(name: 'github_release_tag', defaultValue: 'release-5.1.0', description: 'Specify the GitHub release tag to build from.')
+    }
+    environment {
+        hub_org = "muzafferjoya/enc-service"
+        registryCredential = 'muzaffar-docker-hub'
+        dockerImage = ''
+        releaseTag = "release-5.1.0"
+        
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    if (!env.hub_org) {
+                        echo "Uh Oh! Please set a Jenkins environment variable named hub_org with value as muzafferjoya/enc-service"
+                        error 'Please resolve the errors and rerun..'
+                    } else {
+                        echo "Found environment variable named hub_org with value as"
+                    }
+                }
+            }
+        }
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+        stage('Determine Build Tag') {
+            steps {
+                script {
+                    if (params.github_release_tag == "") {
+                        def scmVars = checkout([$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/project-sunbird/enc-service.git']], branches: [[name: '*/release-5.1.0']]])
+                        def commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                        def branch_name = sh(script: 'git name-rev --name-only HEAD | rev | cut -d "/" -f1| rev', returnStdout: true).trim()
+                        build_tag = "${branch_name}_${commit_hash}"
+                        echo "github_release_tag not specified, using the latest commit hash: ${commit_hash}"
+                    } else {
+                        def scmVars = checkout([$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/project-sunbird/enc-service.git']], branches: [[name: "*/${params.github_release_tag}"]]])
+                        build_tag = params.github_release_tag
+                        echo "github_release_tag specified, building from tag: ${params.github_release_tag}"
+                    }
+                    echo "build_tag: ${build_tag}"
+                }
+            }
+        }
+        stage('Build') {
+            steps {
+                script {
+                    env.NODE_ENV = "build"
+                    echo "Environment will be : ${env.NODE_ENV}"
+                }
+            }
+        }
+        stage('Building image') {
+          steps{
+            script {
+              //dockerImage = docker.build hub_org
+              dockerImage = docker.build("${hub_org}:${releaseTag}")
+            }
+          }
+        }
+        stage('Push Image') {
+      steps{
+        script {
+          docker.withRegistry( '', registryCredential ) {
+            dockerImage.push("$releaseTag")
+             dockerImage.push('latest')
+
+          }
+        }
+      }
+    }
+        
+        
+    }
+    
+}
