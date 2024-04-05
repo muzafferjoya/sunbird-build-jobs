@@ -1,0 +1,76 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'cloud_store_group_id', defaultValue: 'org.sunbird', description: 'Cloud Store Group ID')
+        string(name: 'cloud_store_artifact_id', defaultValue: 'cloud-store-sdk', description: 'Cloud Store Artifact ID')
+        string(name: 'cloud_store_version', defaultValue: '1.4.6', description: 'Cloud Store Version')
+    }
+    
+    environment {
+        hub_org = "muzafferjoya/learner"
+        registryCredential = 'muzaffar-docker-hub'
+        dockerImage = ''
+        releaseTag = "release-5.3.1_RC1"
+    }
+    
+    stages {
+                
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+        
+        stage('Checkout SCM') {
+            steps {
+                checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/Sunbird-Lern/userorg-service.git']], branches: [[name: 'refs/tags/release-5.3.1_RC1']]], poll: false
+            }
+        }
+        stage('Initialize') {
+            steps {
+                script {
+                    def mavenHome = tool 'maven'
+                    env.PATH = "${mavenHome}/bin:${env.PATH}"
+                }
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                script {
+                    env.NODE_ENV = "build"
+                    echo "Environment will be : ${env.NODE_ENV}"
+                    sh 'git log -1'
+                    sh "mvn clean install -DskipTests=true -DCLOUD_STORE_GROUP_ID=${params.cloud_store_group_id} -DCLOUD_STORE_ARTIFACT_ID=${params.cloud_store_artifact_id} -DCLOUD_STORE_VERSION=${params.cloud_store_version}"
+                }
+            }
+        }
+        
+        stage('Unit Tests') {
+            steps {
+                sh "mvn clean install '-Dtest=!%regex[io.opensaber.registry.client.*]' -DfailIfNoTests=false -Dsurefire.failIfNoSpecifiedTests=false -DCLOUD_STORE_GROUP_ID=org.sunbird -DCLOUD_STORE_ARTIFACT_ID=cloud-store-sdk -DCLOUD_STORE_VERSION=1.4.6"
+            }
+        }
+        
+        stage('Package') {
+            steps {
+                dir('controller') {
+                    sh 'mvn play2:dist'
+                }
+                dockerImage = docker.build("${hub_org}:${releaseTag}")
+            }
+        }
+        stage('Push Image'){
+            steps{
+                script{
+                    docker.withRegistry( '', registryCredential ) {
+                        dockerImage.push("$releaseTag")
+                        dockerImage.push('latest')
+                    }
+                }
+            }
+        }
+    }
+    
+}
