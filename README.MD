@@ -17,6 +17,4 @@ This repository is organized to provide a structured approach for managing Jenki
 
 To use the pipeline configurations in this repository, follow these steps:
 
-1. Clone the repository to your local machine.
-2. Navigate to the folder of the job you want to use.
-3. Follow the instructions in the README.md file within that folder to set up the job in your Jenkins environment.
+1. Copy the Jenkins pipeline code and paste it into the Jenkins script editor.
