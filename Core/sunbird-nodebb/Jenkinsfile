@@ -1,0 +1,57 @@
+pipeline {
+    agent any
+    
+    environment {
+        hub_org = "muzafferjoya/sunbird-nodebb"
+        registryCredential = 'muzaffar-docker-hub'
+        dockerImage = ''
+        releaseTag = "release-5.0.0_RC1"
+    }
+
+    parameters {
+        string(name: 'github_release_tag', defaultValue: 'release-5.0.0_RC1', description: 'Specify the GitHub release tag to build from.')
+        string(name: 'nodebb_branch', defaultValue: 'v1.18.6', description: 'Specify the GitHub branch')
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    cleanWs()
+                    def scmVars = checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/Sunbird-Lern/sunbird-nodebb.git']], branches: [[name: 'refs/tags/release-5.0.0_RC1']]], poll: false
+                    checkout([$class: 'GitSCM', branches: [[name: "$params.github_release_tag"]], userRemoteConfigs: [[url: 'https://github.com/Sunbird-Lern/sunbird-nodebb.git']]])
+                    build_tag = sh(script: "echo ${params.github_release_tag.split('/')[-1]}_${env.BUILD_NUMBER}", returnStdout: true).trim()
+                    echo "github_release_tag specified, building from github_release_tag: ${params.github_release_tag}"
+                    echo "build_tag: ${build_tag}"
+                }
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                script {
+                    env.NODE_ENV = "build"
+                    sh("git clone https://github.com/NodeBB/NodeBB.git -b ${params.nodebb_branch}")
+                    sh("cp Dockerfile NodeBB")
+                    sh("cp build.sh NodeBB")
+                    echo "Environment will be : ${env.NODE_ENV}"
+                    //sh('chmod 777 NodeBB/build.sh')
+                    //sh("bash ./NodeBB/build.sh ${build_tag}_${params.nodebb_branch} ${env.NODE_NAME} ${env.hub_org}")
+                    
+            dockerImage = docker.build("${hub_org}:${releaseTag}")
+        
+                }
+            }
+        }
+        stage('Push Image'){
+            steps{
+                script{
+                    docker.withRegistry( '', registryCredential ) {
+                        dockerImage.push("$releaseTag")
+                        dockerImage.push('latest')
+                    }
+                }
+            }
+        }
+    }
+}
