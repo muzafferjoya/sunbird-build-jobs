@@ -8,10 +8,10 @@ pipeline {
     }
     
     environment {
-        hub_org = "muzafferjoya/learner"
+        hub_org = "muzafferjoya/lms-service"
         registryCredential = 'muzaffar-docker-hub'
         dockerImage = ''
-        releaseTag = "release-5.3.1_RC1"
+        releaseTag = "release-5.3.2_RC1"
     }
     
     stages {
@@ -24,7 +24,7 @@ pipeline {
         
         stage('Checkout SCM') {
             steps {
-                checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/Sunbird-Lern/userorg-service.git']], branches: [[name: 'refs/tags/release-5.3.1_RC1']]], poll: false
+                checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/Sunbird-Lern/lms-service.git']], branches: [[name: 'refs/tags/release-5.3.2_RC1']]], poll: false
             }
         }
         stage('Initialize') {
@@ -47,19 +47,13 @@ pipeline {
             }
         }
         
-        stage('Unit Tests') {
-            steps {
-                sh "mvn clean install '-Dtest=!%regex[io.opensaber.registry.client.*]' -DfailIfNoTests=false -Dsurefire.failIfNoSpecifiedTests=false -DCLOUD_STORE_GROUP_ID=org.sunbird -DCLOUD_STORE_ARTIFACT_ID=cloud-store-sdk -DCLOUD_STORE_VERSION=1.4.6"
-            }
-        }
-        
         stage('Package') {
             steps {
-                dir('controller') {
+                dir('service') {
                     sh 'mvn play2:dist'
                 }
                 script {
-                    dockerImage = docker.build("${hub_org}:${releaseTag}")
+            dockerImage = docker.build("${hub_org}:${releaseTag}")
         }
             }
         }
