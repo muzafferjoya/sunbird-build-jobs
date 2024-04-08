@@ -2,11 +2,6 @@ pipeline {
     agent any
 
     environment {
-        ANSI_GREEN = "\u001B[32m"
-        ANSI_NORMAL = "\u001B[0m"
-        ANSI_BOLD = "\u001B[1m"
-        ANSI_RED = "\u001B[31m"
-        ANSI_YELLOW = "\u001B[33m"
         NODE_ENV = 'build'
 
         hub_org = "muzafferjoya/certificate-registry"
@@ -19,18 +14,6 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                script {
-                    if (!env.hub_org) {
-                        echo "${ANSI_BOLD}${ANSI_RED}Uh Oh! Please set a Jenkins environment variable named hub_org with value as muzafferjoya/certificate-registry${ANSI_NORMAL}"
-                        error 'Please resolve the errors and rerun..'
-                    } else {
-                        echo "${ANSI_BOLD}${ANSI_GREEN}Found environment variable named hub_org with value as: ${env.hub_org}${ANSI_NORMAL}"
-                    }
-                }
-            }
-        }
         stage('Initialize') {
             steps {
                 script {

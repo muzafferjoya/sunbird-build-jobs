@@ -2,19 +2,12 @@ pipeline {
     agent any
 
     environment {
-        ANSI_GREEN = "\u001B[32m"
-        ANSI_NORMAL = "\u001B[0m"
-        ANSI_BOLD = "\u001B[1m"
-        ANSI_RED = "\u001B[31m"
-        ANSI_YELLOW = "\u001B[33m"
         NODE_ENV = 'build'
 
         hub_org = "muzafferjoya/cert-service"
         registryCredential = 'muzaffar-docker-hub'
         dockerImage = ''
         
-        //JAVA_HOME = '/usr/lib/jvm/java-17-openjdk-amd64/bin/java'
-        //JAVA_HOME = "${tool 'JDK11'}"
     }
     
     parameters {
@@ -22,18 +15,7 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                script {
-                    if (!env.hub_org) {
-                        echo "${ANSI_BOLD}${ANSI_RED}Uh Oh! Please set a Jenkins environment variable named hub_org with value as muzafferjoya/cert-service${ANSI_NORMAL}"
-                        error 'Please resolve the errors and rerun..'
-                    } else {
-                        echo "${ANSI_BOLD}${ANSI_GREEN}Found environment variable named hub_org with value as: ${env.hub_org}${ANSI_NORMAL}"
-                    }
-                }
-            }
-        }
+        
         stage('Initialize') {
             steps {
                 script {
@@ -44,19 +26,19 @@ pipeline {
         }
         stage('Build') {
             steps {
-             //   withEnv(["JAVA_HOME=${env.JAVA_HOME}"]) {
+             
                 script {
                     if (params.github_release_tag == "") {
                             checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/project-sunbird/cert-service.git']], branches: [[name: 'refs/tags/release-5.0.0_RC2']]], poll: false
                             def commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
                             def branch_name = sh(script: 'git name-rev --name-only HEAD | rev | cut -d "/" -f1| rev', returnStdout: true).trim()
                             build_tag = "${branch_name}_${commit_hash}"
-                            println("${ANSI_BOLD}${ANSI_YELLOW}github_release_tag not specified, using the latest commit hash: ${commit_hash}${ANSI_NORMAL}")
+                            println("github_release_tag not specified, using the latest commit hash: ${commit_hash}")
                         } else {
                             def scmVars = checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/project-sunbird/cert-service.git']], branches: [[name: 'refs/tags/release-5.0.0_RC2']]], poll: false
                             checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/project-sunbird/cert-service.git']], branches: [[name: 'refs/tags/release-5.0.0_RC2']]], poll: false
                             build_tag = params.github_release_tag
-                            println("${ANSI_BOLD}${ANSI_YELLOW}github_release_tag specified, building from tag: ${params.github_release_tag}${ANSI_NORMAL}")
+                            println("github_release_tag specified, building from tag: ${params.github_release_tag}")
                         }
                         echo "build_tag: ${build_tag}"
                         currentDir = sh(returnStdout: true, script: 'pwd').trim()
@@ -67,7 +49,7 @@ pipeline {
                         sh 'mvn clean install'
 
                 }
-          //  }
+          
         }
         }
     }

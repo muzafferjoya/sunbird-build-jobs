@@ -9,17 +9,6 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                script {
-                    if (!env.hub_org) {
-                        error 'Uh Oh! Please set a Jenkins environment variable named hub_org with value as muzafferjoya/dial-service'
-                    } else {
-                        echo "Found environment variable named hub_org with value as: ${env.hub_org}"
-                    }
-                }
-            }
-        }
 
         stage('Initialize') {
             steps {
@@ -62,25 +51,6 @@ pipeline {
             }
         }
 
-        // stage('ArchiveArtifacts') {
-        //     steps {
-        //         script {
-        //             archiveArtifacts "metadata.json"
-        //             currentBuild.description = "${build_tag}"
-        //         }
-        //     }
-        // }
-
     }
-
-    
-
-//     post {
-//     failure {
-//         script {
-//             error 'Build failed!'
-//         }
-//     }
-// }
 
 }

@@ -26,11 +26,6 @@ pipeline {
             steps {
                 script {
                     println "Environment will be : ${NODE_ENV}"
-                    // build_tag = public_repo_commit_hash + "_" + env.BUILD_NUMBER + "_bot"
-                    // if (params.private_bot_repo) {
-                    //     sh('cp -r bot_repo/* .')
-                    //     build_tag = public_repo_commit_hash + "_" + private_repo_commit_hash + "_" + env.BUILD_NUMBER + "_bot"
-                    // }
                     dir('bot') {
                         //sh 'docker build -t ${hub_org}:${BUILD_NUMBER} .'
                         script {

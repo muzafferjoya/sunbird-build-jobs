@@ -63,22 +63,5 @@ pipeline {
                 }
             }
         }
-
-        // stage('ArchiveArtifacts') {
-        //     steps {
-        //         script {
-        //             archiveArtifacts 'metadata.json'
-        //             currentBuild.description = "${build_tag}"
-        //         }
-        //     }
-        // }
     }
-
-    // post {
-    //     failure {
-    //         script {
-    //             error 'Build failed!'
-    //         }
-    //     }
-    // }
 }

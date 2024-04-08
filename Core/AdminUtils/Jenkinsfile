@@ -27,16 +27,7 @@ pipeline {
         }
             }
         }
-        // stage('Build') {
-        //     environment {
-        //         NODE_ENV = "build"
-        //     }
-        //     steps {
-        //         script {
-        //             println "Environment will be : ${NODE_ENV}"
-        //         }
-        //     }
-        // }
+        
         stage('Building image') {
           steps{
             script {

@@ -8,17 +8,6 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                script {
-                    if (!env.hub_org) {
-                        error 'Uh Oh! Please set a Jenkins environment variable named hub_org with value as muzafferjoya/sunbird-analytics-service'
-                    } else {
-                        echo "Found environment variable named hub_org with value as: ${env.hub_org}"
-                    }
-                }
-            }
-        }
 
         stage('Initialize') {
             steps {

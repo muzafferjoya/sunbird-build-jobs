@@ -12,18 +12,7 @@ pipeline {
         
     }
     stages {
-        stage('Checkout') {
-            steps {
-                script {
-                    if (!env.hub_org) {
-                        echo "Uh Oh! Please set a Jenkins environment variable named hub_org with value as muzafferjoya/enc-service"
-                        error 'Please resolve the errors and rerun..'
-                    } else {
-                        echo "Found environment variable named hub_org with value as"
-                    }
-                }
-            }
-        }
+        
         stage('Clean Workspace') {
             steps {
                 cleanWs()
