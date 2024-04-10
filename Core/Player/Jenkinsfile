@@ -1,0 +1,72 @@
+pipeline {
+    agent any
+    
+    environment {
+        hub_org = "muzafferjoya/player"
+        registryCredential = 'muzaffar-docker-hub'
+        dockerImage = ''
+        releaseTag = "release-6.0.0_RC39"
+    }
+
+    parameters {
+        string(name: 'github_release_tag', defaultValue: 'release-6.0.0_RC39', description: 'Specify the GitHub release tag to build from.')
+        string(name: 'WL_Customization', defaultValue: 'https://github.com/Sunbird-Ed/SunbirdEd-portal.git', description: 'Specify the GitHub repo')
+    }
+
+    stages {
+        
+        stage('Checkout SCM') {
+            steps {
+                script {
+                    checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/Sunbird-Ed/SunbirdEd-portal.git']], branches: [[name: 'refs/tags/release-6.0.0_RC39']]], poll: false
+                }
+                
+            }
+        }
+
+        stage('Customize dependencies') {
+            steps {
+                script {
+                    if (params.WL_Customization == null) {
+                        echo "Skipping customization"
+                    } else {
+                        sh """
+                        git clone --recurse-submodules ${params.WL_Customization} sunbirded-portal
+                        cp -r ${WORKSPACE}/sunbirded-portal/images/ ${WORKSPACE}/src/app/client/src/assets
+                        cp -r ${WORKSPACE}/sunbirded-portal/resourceBundles/data/ ${WORKSPACE}/src/app/resourcebundles/
+                        """
+                    }
+                }
+            }
+        }
+
+        // stage('Build') {
+        //     steps {
+        //         script {
+        //             def commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+        //             def build_tag = "${params.github_release_tag.split('/')[-1]}_${commit_hash}_${env.BUILD_NUMBER}"
+        //             echo "build_tag: ${build_tag}"
+        //             sh "bash ./build.sh ${build_tag} ${env.NODE_NAME} ${env.hub_org} ${params.buildDockerImage} ${params.buildCdnAssests} ${params.cdnUrl}"
+        //         }
+        //     }
+        // }
+
+        // stage('ArchiveArtifacts') {
+        //     steps {
+        //         script {
+        //             archiveArtifacts "metadata.json"
+        //             if (params.buildCdnAssests == 'true') {
+        //                 sh """
+        //                 rm -rf cdn_assets
+        //                 mkdir cdn_assets
+        //                 cp -r src/app/dist-cdn/* cdn_assets/
+        //                 zip -Jr cdn_assets.zip cdn_assets
+        //                 """
+        //                 archiveArtifacts "src/app/dist-cdn/index_cdn.ejs, cdn_assets.zip"
+        //             }
+        //             currentBuild.description = "${build_tag}"
+        //         }
+        //     }
+        // }
+    }
+}
