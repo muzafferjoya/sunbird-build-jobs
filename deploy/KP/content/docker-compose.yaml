@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  content-service:
+    image: muzaffar-docker-hub/content-service:jenkins-sb-content-service-3
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./content-service_application.conf:/home/sunbird/content-service-1.0-SNAPSHOT/config/application.conf
+      - ./content-service_logback.xml:/home/sunbird/content-service-1.0-SNAPSHOT/config/logback.xml
+    environment:
+      - JAVA_OPTIONS=-Xmx600m
+    networks:
+      - sunbird-network
+networks:
+  sunbird-network:
+    external: true
+
+#networks:
+#  sunbird-network:
+#    driver: bridge
