@@ -1,0 +1,53 @@
+pipeline {
+    agent any
+    
+    environment {
+        
+        hub_org = "muzafferjoya/router"
+        registryCredential = 'muzaffar-docker-hub'
+        dockerImage = ''
+        releaseTag = "release-3.9.0_RC1"
+    }
+    
+    
+    stages {
+        stage('SCM') {
+            steps {
+            script {
+            checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/project-sunbird/sunbird-bot.git']], branches: [[name: 'refs/tags/release-3.9.0_RC1']]], poll: false
+
+        }
+            }
+        }
+        stage('Build') {
+            environment {
+                NODE_ENV = "build"
+            }
+            steps {
+                script {
+                    println "Environment will be : ${NODE_ENV}"
+                    dir('router') {
+                        //sh 'docker build -t ${hub_org}:${BUILD_NUMBER} .'
+                        script {
+                            //dockerImage = docker.build hub_org
+                            dockerImage = docker.build("${hub_org}:${releaseTag}")
+
+                        }
+                    }
+                }
+            }
+        }
+        stage('Push Image') {
+          steps{
+            script {
+              docker.withRegistry( '', registryCredential ) {
+                dockerImage.push("$releaseTag")
+                 dockerImage.push('latest')
+    
+              }
+            }
+          }
+        }
+    }
+    
+}

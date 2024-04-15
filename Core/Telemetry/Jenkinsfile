@@ -1,0 +1,64 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'github_release_tag', defaultValue: 'release-3.3.0_RC1', description: 'Specify the GitHub release tag to build from.')
+    }
+    
+    environment {
+        hub_org = "muzafferjoya"
+        registryCredential = 'muzaffar-docker-hub'
+        dockerImage = ''
+        releaseTag = "release-3.3.0_RC1"
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    
+                    cleanWs()
+                    
+                    if (params.github_release_tag == "") {
+                        checkout scm
+                        sh 'git submodule update --init'
+                        sh 'git submodule update --init --recursive --remote'
+                        def commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                        def branch_name = sh(script: 'git name-rev --name-only HEAD | rev | cut -d "/" -f1| rev', returnStdout: true).trim()
+                        build_tag = "${branch_name}_${commit_hash}"
+                        echo "Tag not specified, using the latest commit hash: ${commit_hash}"
+                    } else {
+                        def scmVars = checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/project-sunbird/sunbird-telemetry-service.git']], branches: [[name: 'refs/tags/release-3.3.0_RC1']]], poll: false
+                        checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/project-sunbird/sunbird-telemetry-service.git']], branches: [[name: 'refs/tags/release-3.3.0_RC1']]], poll: false
+                        build_tag = params.github_release_tag
+                        echo "Tag specified, building from tag: ${params.github_release_tag}"
+                    }
+                    echo "build_tag: ${build_tag}"
+                }
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                script {
+                    env.NODE_ENV = "build"
+                    echo "Environment will be : ${env.NODE_ENV}"
+                    sh "./build.sh ${build_tag} ${env.NODE_NAME} ${env.hub_org}"
+                    sh 'docker push muzafferjoya/telemetry-service:release-3.3.0_RC1'
+                    //dockerImage = docker.build("${hub_org}:${releaseTag}")
+                    
+                }
+            }
+        }
+        // stage('Push Image') {
+        //     steps {
+        //         script {
+        //             docker.withRegistry('', registryCredential) {
+        //                 dockerImage.push("$releaseTag")
+        //                 dockerImage.push('latest')
+        //             }
+        //         }
+        //     }
+        // }
+    }
+}
