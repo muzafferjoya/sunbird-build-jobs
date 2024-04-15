@@ -1,0 +1,57 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'github_release_tag', defaultValue: 'release-3.8.0_RC18', description: 'Specify the GitHub release tag to build from.')
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                cleanWs()
+                checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/Sunbird-Knowlg/sunbird-learning-platform.git']], branches: [[name: 'refs/tags/release-3.8.0_RC18']]], poll: false
+                script {
+                    def commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    artifact_version = sh(script: "echo ${params.github_release_tag.split('/')[-1]}_${commit_hash}_${env.BUILD_NUMBER}", returnStdout: true).trim()
+                    echo "artifact_version: ${artifact_version}"
+                }
+            }
+        }
+        stage('Initialize') {
+            steps {
+                script {
+                    def mavenHome = tool 'maven'
+                    env.PATH = "${mavenHome}/bin:${env.PATH}"
+                }
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                sh 'mvn clean install -DskipTests=true'
+            }
+        }
+        
+        stage('Archive artifacts') {
+            steps {
+                script {
+                    dir('lp_cassandratrigger_artifacts') {
+                        sh 'cp platform-tools/cassandra-extension/transaction-event-handler/target/cassandra.transaction-event-handler*.jar .'
+                    }
+                    sh "zip -j lp_cassandratrigger_artifacts.zip ${artifact_version} lp_cassandratrigger_artifacts/*"
+                }
+                
+                archiveArtifacts artifacts: "lp_cassandratrigger_artifacts.zip:${artifact_version}", fingerprint: true, onlyIfSuccessful: true
+                archiveArtifacts artifacts: 'metadata.json', onlyIfSuccessful: true
+                
+                script {
+                    def metadata = "{\"artifact_name\" : \"lp_cassandratrigger_artifacts.zip\", \"artifact_version\" : \"${artifact_version}\", \"node_name\" : \"${env.NODE_NAME}\"}"
+                    sh "echo '${metadata}' > metadata.json"
+                }
+                
+                currentBuild.result = "SUCCESS"
+                currentBuild.description = "Artifact: ${artifact_version}, Public: ${params.github_release_tag}"
+            }
+        }
+    }
+}
