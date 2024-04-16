@@ -16,9 +16,13 @@ pipeline {
                         def commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
                         def artifact_version = params.github_release_tag.split('/')[-1] + "_" + commit_hash + "_" + env.BUILD_NUMBER
                         echo "artifact_version: ${artifact_version}"
-                        sh "zip -r content-plugins.zip content-plugins"
                     }
                 }
+            }
+        }
+        stage('Build') {
+            steps {
+                sh "zip -r content-plugins.zip content-plugins"
             }
         }
 
