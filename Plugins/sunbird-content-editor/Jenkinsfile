@@ -1,15 +1,18 @@
 pipeline {
-    agent any   
-
+    agent any
     parameters {
         string(name: 'github_release_tag', defaultValue: 'release-5.2.1_RC3', description: 'Specify the GitHub release tag to build from.')
     }
-
     stages {
         stage('Checkout') {
             steps {
                 cleanWs()
-                checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/Sunbird-Knowlg/sunbird-content-editor.git']], branches: [[name: 'refs/tags/release-5.2.1_RC3']]], poll: false
+                checkout scm: [
+                    $class: 'GitSCM',
+                    userRemoteConfigs: [[url: 'https://github.com/Sunbird-Knowlg/sunbird-content-editor.git']],
+                    branches: [[name: 'refs/tags/release-5.2.1_RC3']],
+                    poll: false
+                ]
                 script {
                     commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
                     branch_name = params.github_release_tag.split('/')[-1]
@@ -19,14 +22,12 @@ pipeline {
                 }
             }
         }
-
         stage('Build') {
             steps {
                 sh 'chmod 777 build.sh'
                 sh "./build.sh ${artifact_version} ${commit_hash}"
             }
         }
-
         stage('ArchiveArtifacts') {
             steps {
                 sh """
@@ -40,13 +41,16 @@ pipeline {
             }
         }
     }
-
     post {
         always {
-            currentBuild.description = "${artifact_version}"
+            script {
+                currentBuild.description = "${artifact_version}"
+            }
         }
         failure {
-            currentBuild.result = "FAILURE"
+            script {
+                currentBuild.result = "FAILURE"
+            }
         }
     }
-    }
+}
