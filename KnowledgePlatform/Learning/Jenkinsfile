@@ -1,0 +1,72 @@
+pipeline {
+
+    agent any
+
+    parameters {
+    string(name: 'github_release_tag', defaultValue: 'release-5.4.1_RC2', description: 'Specify the GitHub release tag to build from.')
+  }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                cleanWs()
+                checkout scm: [
+                $class: 'GitSCM',
+                userRemoteConfigs: [[url: 'https://github.com/muzafferjoya/sunbird-learning-platform.git']],
+                branches: [[name: 'refs/tags/release-5.4.1_RC2']]
+                ], poll: false
+                script {
+                    commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    artifact_version = sh(script: "echo " + params.github_release_tag.split('/')[-1] + "_" + commit_hash + "_" + env.BUILD_NUMBER, returnStdout: true).trim()
+                    echo "artifact_version: "+ artifact_version
+                }
+            }
+        }
+        
+        stage('Pre-Build') {
+            steps {
+                sh """
+                    java -version
+                    rm -rf /data/logs/*
+                    rm -rf /data/graphDB/*
+                    rm -rf /data/testgraphDB/*
+                    rm -rf /data/testGraphDB/*
+                    vim -esnc '%s/dialcode.es_conn_info="localhost:9200"/dialcode.es_conn_info="10.6.0.11:9200"/g|:wq' platform-core/unit-tests/src/test/resources/application.conf
+                    vim -esnc '%s/search.es_conn_info="localhost:9200"/search.es_conn_info="10.6.0.11:9200"/g|:wq' platform-core/unit-tests/src/test/resources/application.conf
+                """
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                sh 'mvn clean install -DskipTests -P ${profile_id} -T10'
+            }
+        }
+        
+        stage('Post_Build-Action') {
+            steps {
+                jacoco(exclusionPattern: '**/common/**,**/dto/**,**/enums/**,**/pipeline/**,**/servlet/**,**/interceptor/**,**/batch/**,**/models/**,**/model/**,**/EnrichActor*.class,**/language/controller/**,**/wordchain/**,**/importer/**,**/Base**,**/ControllerUtil**,**/Indowordnet**,**/Import**')
+            }
+        }
+        
+        stage('Archive artifacts') {
+            steps {
+                script {
+                    def artifactDir = 'lp_artifacts'
+                    mkdir artifactDir
+                    sh """
+                        cp platform-modules/service/target/learning-service.war $artifactDir
+                        ${params.profile_id == "platform-services" ? 'cp platform-tools/spikes/sync-tool/target/sync-tool*.jar $artifactDir' : ''}
+                        ${params.profile_id == "platform-services" ? 'cp platform-tools/spikes/content-tool/target/content-tool-*.jar $artifactDir' : ''}
+                        zip -j lp_artifacts.zip:${artifact_version} $artifactDir/*
+                    """
+                    echo "{\"artifact_name\" : \"lp_artifacts.zip\", \"artifact_version\" : \"${artifact_version}\", \"node_name\" : \"${env.NODE_NAME}\"}" > 'metadata.json'
+                }
+                archiveArtifacts artifacts: "lp_artifacts.zip:${artifact_version}", fingerprint: true, onlyIfSuccessful: true
+                archiveArtifacts artifacts: 'metadata.json', onlyIfSuccessful: true
+                currentBuild.result = "SUCCESS"
+                currentBuild.description = "Artifact: ${artifact_version}, Public: ${params.github_release_tag}"
+            }
+        }
+    }
+}
