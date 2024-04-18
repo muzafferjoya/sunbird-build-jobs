@@ -1,19 +1,19 @@
 pipeline {
-
     agent any
 
     parameters {
-    string(name: 'github_release_tag', defaultValue: 'release-5.4.1_RC2', description: 'Specify the GitHub release tag to build from.')
-  }
+        string(name: 'github_release_tag', defaultValue: 'release-5.4.1_RC2', description: 'Specify the GitHub release tag to build from.')
+        string(name: 'profile_id', defaultValue: 'platform-services', description: 'Specify the Maven profile ID to use.')
+    }
     
     stages {
         stage('Checkout') {
             steps {
                 cleanWs()
                 checkout scm: [
-                $class: 'GitSCM',
-                userRemoteConfigs: [[url: 'https://github.com/muzafferjoya/sunbird-learning-platform.git']],
-                branches: [[name: 'refs/tags/release-5.4.1_RC2']]
+                    $class: 'GitSCM',
+                    userRemoteConfigs: [[url: 'https://github.com/Sunbird-Knowlg/sunbird-learning-platform.git']],
+                    branches: [[name: "refs/tags/release-5.4.1_RC2"]]
                 ], poll: false
                 script {
                     commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
@@ -26,7 +26,6 @@ pipeline {
         stage('Pre-Build') {
             steps {
                 sh """
-                    java -version
                     rm -rf /data/logs/*
                     rm -rf /data/graphDB/*
                     rm -rf /data/testgraphDB/*
@@ -36,10 +35,14 @@ pipeline {
                 """
             }
         }
-        
         stage('Build') {
             steps {
-                sh 'mvn clean install -DskipTests -P ${profile_id} -T10'
+                script {
+                    docker.image('maven:3.8.2-openjdk-8').inside {
+                        sh 'mvn clean install -DskipTests -P ${profile_id} -T10'
+                    }
+                }
+                
             }
         }
         
@@ -53,19 +56,32 @@ pipeline {
             steps {
                 script {
                     def artifactDir = 'lp_artifacts'
-                    mkdir artifactDir
                     sh """
-                        cp platform-modules/service/target/learning-service.war $artifactDir
-                        ${params.profile_id == "platform-services" ? 'cp platform-tools/spikes/sync-tool/target/sync-tool*.jar $artifactDir' : ''}
-                        ${params.profile_id == "platform-services" ? 'cp platform-tools/spikes/content-tool/target/content-tool-*.jar $artifactDir' : ''}
-                        zip -j lp_artifacts.zip:${artifact_version} $artifactDir/*
+                        mkdir ${artifactDir}
+                        cp platform-modules/service/target/learning-service.war ${artifactDir}
                     """
-                    echo "{\"artifact_name\" : \"lp_artifacts.zip\", \"artifact_version\" : \"${artifact_version}\", \"node_name\" : \"${env.NODE_NAME}\"}" > 'metadata.json'
+                    if (params.profile_id == "platform-services") {
+                        sh """
+                            cp platform-tools/spikes/sync-tool/target/sync-tool*.jar ${artifactDir}
+                            cp platform-tools/spikes/content-tool/target/content-tool-*.jar ${artifactDir}
+                        """
+                    }
+                    sh "zip -j ${artifactDir}/${artifact_version}.zip ${artifactDir}/*"
+                    def metadata = "{\"artifact_name\" : \"${artifactDir}.zip\", \"artifact_version\" : \"${artifact_version}\", \"node_name\" : \"${env.NODE_NAME}\"}"
+                    writeFile file: 'metadata.json', text: metadata
+                    archiveArtifacts artifacts: "${artifactDir}/${artifact_version}.zip", fingerprint: true, onlyIfSuccessful: true
+                    archiveArtifacts artifacts: 'metadata.json', onlyIfSuccessful: true
+                    currentBuild.result = "SUCCESS"
+                    currentBuild.description = "Artifact: ${artifact_version}, Public: ${params.github_release_tag}"
                 }
-                archiveArtifacts artifacts: "lp_artifacts.zip:${artifact_version}", fingerprint: true, onlyIfSuccessful: true
-                archiveArtifacts artifacts: 'metadata.json', onlyIfSuccessful: true
-                currentBuild.result = "SUCCESS"
-                currentBuild.description = "Artifact: ${artifact_version}, Public: ${params.github_release_tag}"
+            }
+        }
+    }
+    
+    post {
+        failure {
+            script {
+                currentBuild.result = "FAILURE"
             }
         }
     }
