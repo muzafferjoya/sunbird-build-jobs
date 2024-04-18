@@ -1,0 +1,61 @@
+pipeline {
+
+    agent any
+    
+    environment {
+        hub_org = "muzafferjoya"
+        registryCredential = 'muzaffar-docker-hub'
+        dockerImage = ''
+        releaseTag = "secor-0.29_RC2"
+    }
+
+    parameters {
+        string(name: 'github_release_tag', defaultValue: 'secor-0.29_RC2', description: 'Specify the GitHub release tag to build from.')
+    }
+    
+    stages {
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+        stage('Checkout SCM') {
+            steps {
+                checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/Sunbird-Obsrv/secor.git']], branches: [[name: 'refs/tags/secor-0.29_RC2']]], poll: false
+                script {
+                    commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    build_tag = sh(script: "echo ${params.github_release_tag.split('/')[-1]}_${commit_hash}_${env.BUILD_NUMBER}", returnStdout: true).trim()
+                    echo "build_tag: ${build_tag}"
+                }
+            }
+        }
+        stage('Initialize') {
+            steps {
+                script {
+                    def mavenHome = tool 'maven'
+                    env.PATH = "${mavenHome}/bin:${env.PATH}"
+                }
+            }
+        }
+        stage('Build') {
+            steps {
+                sh 'mvn clean install'
+            }
+        }
+        stage('Package') {
+            steps {
+                sh "mvn package -Pbuild-docker-image -Drelease-version=${build_tag}"
+            }
+        }
+        stage('Retagging') {
+            steps {
+                sh """
+                    docker tag secor:${build_tag} ${env.hub_org}/secor:${build_tag}
+                    echo {\"image_name\" : \"secor\", \"image_tag\" : \"${build_tag}\", \"node_name\" : \"${env.NODE_NAME}\"} > metadata.json
+                    docker push ${hub_org}/secor:${build_tag}
+                    
+                """
+            }
+        }
+    }
+}
