@@ -1,0 +1,74 @@
+pipeline {
+
+    agent any
+
+    parameters {
+        string(name: 'CLOUD_STORE_GROUP_ID', defaultValue: 'org.sunbird', description: 'Cloud store group ID')
+        string(name: 'CLOUD_STORE_ARTIFACT_ID', defaultValue: 'cloud-store-sdk_2.12', description: 'Cloud store artifact ID')
+        string(name: 'CLOUD_STORE_VERSION', defaultValue: '1.4.0', description: 'Cloud store version')
+        string(name: 'github_release_tag', defaultValue: 'release-5.1.2_RC1', description: 'Specify the GitHub release tag to build from.')
+    }
+
+
+    stages {
+        stage('Checkout') {
+            steps {
+                cleanWs()
+                checkout scm: [
+                            $class: 'GitSCM',
+                            userRemoteConfigs: [[url: 'https://github.com/Sunbird-Obsrv/sunbird-core-dataproducts.git']],
+                            branches: [[name: 'refs/tags/release-5.1.2_RC1']]
+                        ], poll: false
+                script {
+                    commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    artifact_version = sh(script: "echo " + params.github_release_tag.split('/')[-1] + "_" + commit_hash + "_" + env.BUILD_NUMBER, returnStdout: true).trim()
+                    echo "artifact_version: "+ artifact_version
+                }
+            }
+        }
+        stage('Initialize') {
+            steps {
+                script {
+                    def mavenHome = tool 'maven'
+                    env.PATH = "${mavenHome}/bin:${env.PATH}"
+                }
+            }
+        }
+        
+        
+        
+        stage('Build') {
+            steps {
+                script {
+                    sh "mvn clean install -DskipTests -DCLOUD_STORE_GROUP_ID=${params.CLOUD_STORE_GROUP_ID} -DCLOUD_STORE_ARTIFACT_ID=${params.CLOUD_STORE_ARTIFACT_ID} -DCLOUD_STORE_VERSION=${params.CLOUD_STORE_VERSION}"
+                }
+                
+            }
+        }
+        
+        // stage('Archive artifacts') {
+        //     steps {
+        //         script {
+        //             sh """
+        //                 mkdir lpa_core_dp_artifacts
+        //                 cp batch-models/target/batch-models-2.0.jar lpa_core_dp_artifacts
+        //                 cp job-manager/target/job-manager-2.0.jar lpa_core_dp_artifacts
+        //                 zip -j lpa_core_dp_artifacts.zip:${artifact_version} lpa_core_dp_artifacts/*
+        //             """
+        //             archiveArtifacts artifacts: "lpa_core_dp_artifacts.zip:${artifact_version}", fingerprint: true, onlyIfSuccessful: true
+        //             sh """echo {\\"artifact_name\\" : \\"lpa_core_dp_artifacts.zip\\", \\"artifact_version\\" : \\"${artifact_version}\\", \\"node_name\\" : \\"${env.NODE_NAME}\\"} > metadata.json"""
+        //             archiveArtifacts artifacts: 'metadata.json', onlyIfSuccessful: true
+        //             currentBuild.description = artifact_version
+        //         }
+        //     }
+        // }
+    }
+    
+    // post {
+    //     failure {
+    //         script {
+    //             currentBuild.result = "FAILURE"
+    //         }
+    //     }
+    // }
+}
