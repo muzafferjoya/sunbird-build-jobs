@@ -1,0 +1,92 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'CLOUD_STORE_GROUP_ID', defaultValue: 'org.sunbird', description: 'Cloud store group ID')
+        string(name: 'CLOUD_STORE_ARTIFACT_ID', defaultValue: 'cloud-store-sdk_2.12', description: 'Cloud store artifact ID')
+        string(name: 'CLOUD_STORE_VERSION', defaultValue: '1.4.0', description: 'Cloud store version')
+        string(name: 'github_release_tag', defaultValue: 'release-5.1.2_RC1', description: 'Specify the GitHub release tag to build from.')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                //cleanWs()
+                script {
+                    if (params.github_release_tag == "") {
+                        checkout scm: [
+                            $class: 'GitSCM',
+                            userRemoteConfigs: [[url: 'https://github.com/Sunbird-Obsrv/sunbird-analytics-core.git']],
+                            branches: [[name: 'refs/tags/release-5.1.2_RC1']]
+                        ], poll: false
+
+                        commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                        branch_name = sh(script: 'git name-rev --name-only HEAD | rev | cut -d "/" -f1| rev', returnStdout: true).trim()
+                        artifact_version = "${branch_name}_${commit_hash}"
+                        println("github_release_tag not specified, using the latest commit hash: ${commit_hash}")
+                    } else {
+                        def scmVars = checkout scm: [
+                            $class: 'GitSCM',
+                            userRemoteConfigs: [[url: 'https://github.com/Sunbird-Obsrv/sunbird-analytics-core.git']],
+                            branches: [[name: 'refs/tags/release-5.1.2_RC1']]
+                        ], poll: false
+
+                        checkout scm: [
+                            $class: 'GitSCM',
+                            userRemoteConfigs: [[url: 'https://github.com/Sunbird-Obsrv/sunbird-analytics-core.git']],
+                            branches: [[name: 'refs/tags/release-5.1.2_RC1']]
+                        ], poll: false
+
+                        artifact_version = params.github_release_tag
+                        println("github_release_tag specified, building from github_release_tag: ${params.github_release_tag}")
+                    }
+                    echo "artifact_version: ${artifact_version}"
+                }
+            }
+        }
+        stage('Initialize') {
+            steps {
+                script {
+                    def mavenHome = tool 'maven'
+                    env.PATH = "${mavenHome}/bin:${env.PATH}"
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                script {
+                    sh "mvn clean install -DskipTests -DCLOUD_STORE_GROUP_ID=${params.CLOUD_STORE_GROUP_ID} -DCLOUD_STORE_ARTIFACT_ID=${params.CLOUD_STORE_ARTIFACT_ID} -DCLOUD_STORE_VERSION=${params.CLOUD_STORE_VERSION}"
+                }
+                
+            }
+        }
+
+        stage('Archive artifacts') {
+            steps {
+                sh """
+                    mkdir lpa_core_artifacts
+                    cp analytics-job-driver/target/analytics-framework-2.0.jar lpa_core_artifacts
+                    cp analytics-core/lib/scruid*.jar lpa_core_artifacts
+                    zip -j lpa_core_artifacts.zip:${artifact_version} lpa_core_artifacts/*
+                """
+                archiveArtifacts artifacts: "lpa_core_artifacts.zip:${artifact_version}", fingerprint: true, onlyIfSuccessful: true
+                sh """echo "{\"artifact_name\" : \"lpa_core_artifacts.zip\", \"artifact_version\" : \"${artifact_version}\", \"node_name\" : \"${env.NODE_NAME}\"}" > metadata.json"""
+                archiveArtifacts artifacts: 'metadata.json', onlyIfSuccessful: true
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                currentBuild.description = "${artifact_version}"
+            }
+        }
+        failure {
+            script {
+                currentBuild.result = "FAILURE"
+            }
+        }
+    }
+}
