@@ -1,0 +1,78 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'github_release_tag', defaultValue: 'release-4.9.0_RC2', description: 'GitHub release tag')
+    }
+    
+    stages {
+        
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+        stage('Checkout and Build') {
+            steps {
+                script {
+                    if (params.github_release_tag == "") {
+                        checkout scm: [
+                            $class: 'GitSCM',
+                            userRemoteConfigs: [[url: 'https://github.com/Sunbird-Obsrv/sunbird-data-pipeline.git']],
+                            branches: [[name: 'refs/tags/release-4.9.0_RC2']]
+                        ], poll: false
+                        sh('git submodule update --init')
+                        sh('git submodule update --init --recursive --remote')
+                        def commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                        def branch_name = sh(script: 'git name-rev --name-only HEAD | rev | cut -d "/" -f1| rev', returnStdout: true).trim()
+                        build_tag = "${branch_name}_${commit_hash}"
+                        echo "Tag not specified, using the latest commit hash: ${commit_hash}"
+                    } else {
+                        def scmVars = checkout scm: [
+                            $class: 'GitSCM',
+                            userRemoteConfigs: [[url: 'https://github.com/Sunbird-Obsrv/sunbird-data-pipeline.git']],
+                            branches: [[name: 'refs/tags/release-4.9.0_RC2']]
+                        ], poll: false
+                        checkout scm: [
+                            $class: 'GitSCM',
+                            userRemoteConfigs: [[url: 'https://github.com/Sunbird-Obsrv/sunbird-data-pipeline.git']],
+                            branches: [[name: 'refs/tags/release-4.9.0_RC2']]
+                        ], poll: false
+                        build_tag = params.github_release_tag
+                        echo "Tag specified, building from tag: ${params.github_release_tag}"
+                    }
+                    echo "build_tag: ${build_tag}"
+                }
+            }
+        }
+        stage('Build') {
+            environment {
+                NODE_ENV = "build"
+            }
+            steps {
+                script {
+                    echo "Environment will be : ${NODE_ENV}"
+                    sh """
+                       cd druid/druid-api && chmod 777 build.sh
+                       ./build.sh ${build_tag} \${env.NODE_NAME} \${env.hub_org}
+                    """
+                }
+            }
+        }
+        stage('Archive Artifacts') {
+            steps {
+                archiveArtifacts "druid/druid-api/metadata.json"
+                script {
+                    currentBuild.description = "${build_tag}"
+                }
+            }
+        }
+    }
+    post {
+        failure {
+            script {
+                currentBuild.result = "FAILURE"
+            }
+        }
+    }
+}

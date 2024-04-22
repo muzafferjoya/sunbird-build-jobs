@@ -43,7 +43,10 @@ pipeline {
                     echo "Environment will be: ${env.NODE_ENV}"
                     sh 'git log -1'
                     sh "cd ${currentDir}"
-                    sh 'mvn clean install'
+                    // docker.image('maven:3.8.2-openjdk-8').inside {
+                        sh 'mvn clean install'
+                    //}
+                    
                 }
             }
         }
@@ -57,6 +60,11 @@ pipeline {
                 script {
                     dockerImage = docker.build("${hub_org}:${releaseTag}")
                 }                
+            }
+        }
+        stage('Push Image'){
+            steps{
+                sh 'docker push ${hub_org}:${releaseTag}'
             }
         }
     }
