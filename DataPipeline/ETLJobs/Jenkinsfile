@@ -1,0 +1,107 @@
+pipeline {
+    agent any
+    
+    parameters {
+        string(name: 'github_release_tag', defaultValue: 'release-4.10.5_RC2', description: 'GitHub release tag (e.g. v1.2.3)')
+    }
+    
+    environment {
+        ANSI_GREEN = "\u001B[32m"
+        ANSI_NORMAL = "\u001B[0m"
+        ANSI_BOLD = "\u001B[1m"
+        ANSI_RED = "\u001B[31m"
+        ANSI_YELLOW = "\u001B[33m"
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    ansiColor('xterm') {
+                        cleanWs()
+                        if (params.github_release_tag == "") {
+                            checkout scm: [
+                            $class: 'GitSCM',
+                            userRemoteConfigs: [[url: 'https://github.com/Sunbird-Ed/sunbird-data-products.git']],
+                            branches: [[name: 'refs/tags/release-4.10.5_RC2']]
+                        ], poll: false
+                            commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                            branch_name = sh(script: 'git name-rev --name-only HEAD | rev | cut -d "/" -f1| rev', returnStdout: true).trim()
+                            artifact_version = branch_name + "_" + commit_hash
+                            println("${ANSI_BOLD}${ANSI_YELLOW}github_release_tag not specified, using the latest commit hash: ${commit_hash}${ANSI_NORMAL}")
+                        } else {
+                            def scmVars = checkout scm: [
+                            $class: 'GitSCM',
+                            userRemoteConfigs: [[url: 'https://github.com/Sunbird-Ed/sunbird-data-products.git']],
+                            branches: [[name: 'refs/tags/release-4.10.5_RC2']]
+                        ], poll: false
+                            checkout scm: [
+                            $class: 'GitSCM',
+                            userRemoteConfigs: [[url: 'https://github.com/Sunbird-Ed/sunbird-data-products.git']],
+                            branches: [[name: 'refs/tags/release-4.10.5_RC2']]
+                        ], poll: false
+                            artifact_version = params.github_release_tag
+                            println("${ANSI_BOLD}${ANSI_YELLOW}github_release_tag specified, building from github_release_tag: ${params.github_release_tag}${ANSI_NORMAL}")
+                        }
+                        echo "artifact_version: ${artifact_version}"
+                    }
+                }
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                script {
+                    docker.image('maven:3.8.2-openjdk-8').inside {
+                        sh "mvn -f etl-jobs/pom.xml -Dlog4j.configuration=\$WORKSPACE/logs -Dcobertura.report.format=xml clean cobertura:cobertura package"
+                    }
+                }
+            }
+        }
+        
+        stage('Publish_test_results') {
+            steps {
+                cobertura(
+                    autoUpdateHealth: false,
+                    autoUpdateStability: false,
+                    coberturaReportFile: '**/target/site/cobertura/coverage.xml',
+                    conditionalCoverageTargets: '70, 0, 0',
+                    failUnhealthy: false,
+                    failUnstable: false,
+                    lineCoverageTargets: '80, 0, 0',
+                    maxNumberOfBuilds: 0,
+                    methodCoverageTargets: '80, 0, 0',
+                    onlyStable: false,
+                    sourceEncoding: 'ASCII',
+                    zoomCoverageChart: false
+                )
+            }
+        }
+        
+        stage('Archive artifacts') {
+            steps {
+                script {
+                    sh """
+                        mkdir etl_jobs_artifacts
+                        cp etl-jobs/target/etl-jobs-1.0.jar etl_jobs_artifacts
+                        cp etl-jobs/target/etl-jobs-1.0-distribution.tar.gz etl_jobs_artifacts
+                        zip -j etl_jobs_artifacts.zip:${artifact_version} etl_jobs_artifacts/*
+                    """
+                    archiveArtifacts artifacts: "etl_jobs_artifacts.zip:${artifact_version}", fingerprint: true, onlyIfSuccessful: true
+                    sh """echo {"artifact_name" : "etl_jobs_artifacts.zip", "artifact_version" : "${artifact_version}", "node_name" : "${env.NODE_NAME}"} > metadata.json"""
+                    archiveArtifacts artifacts: 'metadata.json', onlyIfSuccessful: true
+                    currentBuild.result = "SUCCESS"
+                    currentBuild.description = "Artifact: ${artifact_version}, Public: ${params.github_release_tag}"
+                }
+            }
+        }
+    }
+    
+    post {
+        failure {
+            script {
+                currentBuild.result = "FAILURE"
+            }
+        }
+    }
+}
