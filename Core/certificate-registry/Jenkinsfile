@@ -2,61 +2,76 @@ pipeline {
     agent any
 
     environment {
+        
         NODE_ENV = 'build'
 
         hub_org = "muzafferjoya/certificate-registry"
         registryCredential = 'muzaffar-docker-hub'
         dockerImage = ''
+        releaseTag = "release-5.0.0_RC1"
     }
     
     parameters {
-        string(defaultValue: 'refs/tags/release-5.0.0_RC1', description: 'GitHub release tag or branch', name: 'github_release_tag')
+        string(defaultValue: 'release-5.0.0_RC1', description: 'GitHub release tag or branch', name: 'github_release_tag')
     }
 
     stages {
+        
         stage('Initialize') {
             steps {
                 script {
                     def mavenHome = tool 'maven'
                     env.PATH = "${mavenHome}/bin:${env.PATH}"
+                    env.JAVA_HOME = '/usr/lib/jvm/java-11-openjdk-amd64'
+
                 }
             }
         }
-        stage('Build') {
+        stage('SCM') {
             steps {
-                script {
-                    checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/Sunbird-Lern/certificate-registry.git']], branches: [[name: 'refs/tags/release-5.0.0_RC1']]], poll: false
-                    commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+              script {
+                  cleanWs()
+                  checkout scm: [
+                    $class: 'GitSCM',
+                    userRemoteConfigs: [[url: 'https://github.com/Sunbird-Lern/certificate-registry.git']],
+                    branches: [[name: "refs/tags/${params.github_release_tag}"]]
+                ], poll: false
+                commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
                     build_tag = sh(script: "echo ${params.github_release_tag.split('/')[-1]}_${commit_hash}_${env.BUILD_NUMBER}", returnStdout: true).trim()
                     echo "build_tag: ${build_tag}"
                     echo "Environment will be : ${env.NODE_ENV}"
-                    sh 'git log -1'
-                    sh 'mvn clean install'
+        }
+    }
+}
+
+        
+        stage('Installing Maven Dep') {
+            steps {
+                script {
+                    
+                        sh 'mvn clean install'
+                    }
+                }
+            }
+        
+        stage('Package') {
+            steps {
+                script {
+                    dir('service') {
+                        sh 'mvn play2:dist'
+                        sh 'cp target/service-1.0.0-SNAPSHOT-dist.zip ../'
+                    }
+                    sh 'docker build -t ${hub_org}:${releaseTag} .'
+                    
                 }
             }
         }
-        // stage('Package') {
-        //     steps {
-        //         script {
-        //             dir('service') {
-        //                 sh 'mvn play2:dist'
-        //                 sh 'cp target/service-1.0.0-SNAPSHOT-dist.zip ../'
-        //             }
-        //             sh('chmod 777 ./build.sh')
-        //             sh("./build.sh ${build_tag} ${env.NODE_NAME} ${env.hub_org}")
-        //         }
-        //     }
-        // }
-        // stage('ArchiveArtifacts') {
-        //     steps {
-        //         archiveArtifacts "metadata.json"
-        //         currentBuild.description = "${build_tag}"
-        //     }
-        // }
+        stage('Push Image'){
+            steps{
+                sh 'docker push ${hub_org}:${releaseTag}'
+            }
+        }
+        
     }
-    // post {
-    //     failure {
-    //         currentBuild.result = "FAILURE"
-    //     }
-    // }
+    
 }
