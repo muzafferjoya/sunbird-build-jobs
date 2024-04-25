@@ -1,0 +1,57 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'github_release_tag', description: 'GitHub release tag', defaultValue: 'release-3.8.0_RC14')
+    }
+    
+    environment {
+        hub_org = "muzafferjoya"
+        registryCredential = 'muzaffar-docker-hub'
+        dockerImage = ''
+        releaseTag = "release-3.8.0_RC14"
+    }
+
+
+    stages {
+        
+        stage('Checkout & Build') {
+            steps {
+                cleanWs()
+                checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/project-sunbird/sunbird-devops.git']], branches: [[name: 'refs/tags/release-3.8.0_RC14']]], poll: false
+                script {
+                    env.NODE_ENV = "build"
+                    echo "Environment will be : ${env.NODE_ENV}"
+                    def commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    def build_tag = sh(script: "echo ${params.github_release_tag.split('/')[-1]}_${commit_hash}_${env.BUILD_NUMBER}", returnStdout: true).trim()
+                    echo "build_tag: ${build_tag}"
+                    sh "git submodule update --init"
+                    sh "cd ./images/proxy && ./build.sh ${build_tag} ${env.NODE_NAME} ${env.hub_org}"
+                    env.BUILD_TAG = build_tag
+                    
+                }
+            }
+        }
+        stage('Push Image'){
+            steps{
+                sh "docker push muzafferjoya/proxy:${releaseTag}_a328916b1_${env.BUILD_NUMBER}"
+            }
+        }
+
+        stage('ArchiveArtifacts') {
+            steps {
+                archiveArtifacts artifacts: 'images/proxy/metadata.json', fingerprint: true
+                script {
+                    currentBuild.description = "${env.BUILD_TAG}"
+                }
+            }
+        }
+    }
+    post {
+        failure {
+            script {
+                currentBuild.result = "FAILURE"
+            }
+        }
+    }
+}
