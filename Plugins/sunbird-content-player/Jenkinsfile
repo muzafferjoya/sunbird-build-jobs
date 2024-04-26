@@ -4,12 +4,13 @@ pipeline {
     parameters {
         string(name: 'github_release_tag', defaultValue: 'release-4.6.0_RC1', description: 'Specify the GitHub release tag to build from.')
     }
-    
+
     stages {
         stage('Checkout') {
             steps {
                 cleanWs()
                 checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'https://github.com/Sunbird-Knowlg/sunbird-content-player.git']], branches: [[name: 'refs/tags/release-4.6.0_RC1']]], poll: false
+
                 script {
                     commit_hash = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
                     branch_name = sh(script: 'git name-rev --name-only HEAD | rev | cut -d "/" -f1| rev', returnStdout: true).trim()
@@ -18,42 +19,40 @@ pipeline {
                 }
             }
         }
-        
-        stage('Build') {
+
+        stage('Install Dependencies') {
             steps {
                 script {
                     sh """#!/bin/bash
-                        export NVM_DIR="\$HOME/.nvm"
-                        [ -s "\$NVM_DIR/nvm.sh" ] && source "\$NVM_DIR/nvm.sh" # This loads nvm
-                        [ -s "\$NVM_DIR/bash_completion" ] && source "\$NVM_DIR/bash_completion" # This loads nvm bash_completion
-                        nvm install 10.16.3
-                        export player_version_number=${branch_name}
-                        export build_number=${commit_hash}
-                        export filter_plugins=false # For the preview build generation dont split the plugins.
-                        cd player
-                        npm install
-                        npm run build-preview ekstep
-                        grunt compress:preview
-                        grunt generate-libs
-                        
+                    export NVM_DIR="\$HOME/.nvm"
+                    [ -s "\$NVM_DIR/nvm.sh" ] && source "\$NVM_DIR/nvm.sh"
+                    [ -s "\$NVM_DIR/bash_completion" ] && source "\$NVM_DIR/bash_completion"
+                    nvm install 10.16.3
+                    cd player
+                    npm install
+                    npm install grunt
+                    npm install grunt-cordovacli grunt-contrib-uglify grunt-contrib-watch grunt-contrib-copy grunt-contrib-compress grunt-aws-s3 grunt-contrib-clean grunt-rename grunt-mkdir grunt-text-replace grunt-karma grunt-jsdoc grunt-contrib-concat grunt-injector --save-dev
                     """
                 }
             }
         }
-        
-        stage('ArchiveArtifacts') {
+
+        stage('Build') {
             steps {
                 script {
-                    sh """
-                        mkdir CR_Preview_Artifacts
-                        cp player/preview.zip CR_Preview_Artifacts
-                        #cp player/libs.zip CR_Preview_Artifacts
-                        zip -j CR_Preview_Artifacts.zip:${artifact_version} CR_Preview_Artifacts/*                      
+                    sh """#!/bin/bash
+                    export NVM_DIR="\$HOME/.nvm"
+                    [ -s "\$NVM_DIR/nvm.sh" ] && source "\$NVM_DIR/nvm.sh"
+                    [ -s "\$NVM_DIR/bash_completion" ] && source "\$NVM_DIR/bash_completion"
+                    nvm use 10.16.3
+                    export player_version_number=${branch_name}
+                    export build_number=${commit_hash}
+                    export filter_plugins=false
+                    cd player
+                    npm run build-preview ekstep
+                    grunt compress:preview
+                    grunt generate-libs
                     """
-                    archiveArtifacts "CR_Preview_Artifacts.zip:${artifact_version}"
-                    sh """echo {\\"artifact_name\\" : \\"CR_Preview_Artifacts.zip\\", \\"artifact_version\\" : \\"${artifact_version}\\", \\"node_name\\" : \\"${env.NODE_NAME}\\"} > metadata.json"""
-                    archiveArtifacts artifacts: 'metadata.json', onlyIfSuccessful: true
-                    currentBuild.description = "${artifact_version}"
                 }
             }
         }
