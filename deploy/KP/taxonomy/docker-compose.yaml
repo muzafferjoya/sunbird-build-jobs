@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  taxonomy-service:
+    image: taxonomy-service/taxonomy-service:jenkins-sb-taxonomy-service-1
+    ports:
+      - "9001:9000"
+    volumes:
+      - ./taxonomy-service_application.conf:/home/sunbird/taxonomy-service-1.0-SNAPSHOT/config/application.conf
+      - ./taxonomy-service_logback.xml:/home/sunbird/taxonomy-service-1.0-SNAPSHOT/config/logback.xml
+    environment:
+      - JAVA_OPTIONS=-Xmx600m
+    networks:
+      - sunbird-network
+networks:
+  sunbird-network:
+    external: true
+
+#networks:
+#  sunbird-network:
+#    driver: bridge
